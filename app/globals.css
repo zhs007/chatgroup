@@ -1,0 +1,39 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  html {
+    font-family: system-ui, sans-serif;
+  }
+}
+
+@layer components {
+  .chat-message {
+    @apply p-4 rounded-lg mb-4 max-w-4xl;
+  }
+  
+  .chat-message.user {
+    @apply bg-blue-100 ml-auto;
+  }
+  
+  .chat-message.assistant {
+    @apply bg-gray-100;
+  }
+  
+  .typing-indicator {
+    @apply flex items-center space-x-1;
+  }
+  
+  .typing-dot {
+    @apply w-2 h-2 bg-gray-400 rounded-full animate-pulse;
+  }
+  
+  .role-card {
+    @apply p-6 rounded-lg border-2 border-transparent cursor-pointer transition-all duration-200 hover:border-blue-300 hover:shadow-lg;
+  }
+  
+  .role-card.selected {
+    @apply border-blue-500 bg-blue-50;
+  }
+}
