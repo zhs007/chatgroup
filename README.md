@@ -5,17 +5,22 @@
 ## 功能特色
 
 - 🤖 **多AI角色支持**: 包含主持人、游戏制作人、数学师、玩家、美术师、制图师等专业角色
+- 🎯 **智能会议管理**: Jarvis通过Function Call智能管理讨论流程
 - 💬 **实时聊天**: 支持SSE流式响应，实现AI打字机效果
-- 🎯 **角色选择**: 用户可以自由选择参与讨论的AI角色
+- 📊 **发言统计**: 实时显示各角色参与情况，确保讨论平衡
+- 🔄 **自动角色切换**: 主持人根据讨论内容自动邀请合适的专家发言
 - 🎨 **现代化UI**: 使用Tailwind CSS构建的美观界面
 - 🌐 **代理支持**: 支持通过代理访问Gemini API
 
 ## AI角色介绍
 
 ### 主持人 Jarvis (必选)
-- **职责**: 主持会议，决定发言顺序，引导讨论方向
+- **职责**: 主持会议，通过Function Call智能管理发言顺序
 - **模型**: gemini-2.0-flash-exp
-- **特点**: 善于总结和引导，控制讨论节奏
+- **特点**: 
+  - 智能分析讨论内容，自动邀请合适的专家
+  - 监控发言平衡，确保所有角色都有参与机会
+  - 使用工具管理会议流程
 
 ### 资深Slot Game制作人 Tom
 - **职责**: 提出具体的游戏创意和玩法设计
@@ -104,30 +109,39 @@ npm run dev
 
 ### 2. 开始讨论
 - 描述您对slot游戏的想法或需求
-- Jarvis会引导讨论并邀请合适的专家参与
-- 每个AI角色会根据其专业领域提供建议
+- Jarvis会智能分析您的需求，自动邀请最合适的专家参与
+- 系统会自动管理发言顺序，确保讨论的连贯性
 
-### 3. 互动方式
-- 直接输入您的想法和问题
-- AI角色会轮流发言，形成自然的讨论
-- 支持实时打字效果，提供沉浸式体验
+### 3. 智能互动
+- Jarvis会根据讨论内容使用Function Call工具
+- 自动邀请相关专家，如：游戏设计问题邀请Tom，数学问题邀请Ash
+- 监控发言平衡，确保每个角色都有发言机会
+- 支持实时查看发言统计
 
 ## 项目结构
 
 ```
 chatgroup/
 ├── app/                    # Next.js App Router
-│   ├── api/chat/          # API路由
+│   ├── api/
+│   │   ├── chat/          # 聊天API路由
+│   │   └── meeting/       # 会议管理API
 │   ├── chat/              # 聊天页面
 │   ├── globals.css        # 全局样式
 │   ├── layout.tsx         # 根布局
 │   └── page.tsx           # 首页(角色选择)
+├── components/
+│   └── MeetingStatus.tsx  # 会议状态组件
 ├── config/
 │   └── ai-roles.ts        # AI角色配置
 ├── lib/
-│   └── gemini-client.ts   # Gemini API客户端
+│   ├── gemini-client.ts   # Gemini API客户端
+│   ├── meeting-manager.ts # 会议管理器
+│   ├── function-calls.ts  # Function Call定义
+│   └── function-executor.ts # Function Call执行器
 ├── types/
-│   └── chat.ts            # 类型定义
+│   ├── chat.ts            # 聊天类型定义
+│   └── meeting.ts         # 会议类型定义
 └── ...配置文件
 ```
 

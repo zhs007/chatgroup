@@ -2,6 +2,9 @@ import { NextRequest, NextResponse } from 'next/server'
 import { GeminiClient } from '@/lib/gemini-client'
 import { getAIRole } from '@/config/ai-roles'
 import { Message } from '@/types/chat'
+import { MeetingManager } from '@/lib/meeting-manager'
+import { FunctionCallExecutor } from '@/lib/function-executor'
+import { getFunctionCallPrompt } from '@/lib/function-calls'
 
 export async function POST(request: NextRequest) {
   try {
@@ -12,7 +15,17 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Invalid role ID' }, { status: 400 })
     }
 
+    // 获取或创建会议会话
+    const meetingManager = MeetingManager.getInstance()
+    const sessionId = `session_${Date.now()}`
+    
+    let session = meetingManager.getSession(sessionId)
+    if (!session) {
+      session = meetingManager.createSession(sessionId, selectedRoles)
+    }
+
     const geminiClient = new GeminiClient()
+    const functionExecutor = new FunctionCallExecutor()
     
     // 构建对话历史
     const conversationContext = messages
@@ -36,11 +49,18 @@ export async function POST(request: NextRequest) {
         .filter((id: string) => id !== 'jarvis')
         .map((id: string) => getAIRole(id))
         .filter(Boolean)
-        .map((r: any) => `@${r.id} (${r.name} - ${r.description})`)
+        .map((r: any) => `${r.id} (${r.name} - ${r.description})`)
         .join(', ')
       
       systemPrompt += `\n\n当前讨论中的可用专家: ${availableRoles}\n\n`
-      systemPrompt += '在你的回复中，如果需要特定专家参与，请在回复末尾用 @roleId 的格式指定下一个发言者。例如：@tom 或 @ash。\n\n'
+      systemPrompt += getFunctionCallPrompt()
+      
+      // 添加发言统计信息
+      const stats = meetingManager.getSpeakingStats(sessionId)
+      const statsText = Object.entries(stats)
+        .map(([id, count]) => `${getAIRole(id)?.name || id}: ${count}次`)
+        .join(', ')
+      systemPrompt += `\n\n当前发言统计: ${statsText}\n\n`
     }
     
     systemPrompt += `\n\n对话历史:\n${conversationContext}\n\n请根据你的角色设定回复:`
@@ -54,11 +74,15 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'No user message found' }, { status: 400 })
     }
 
+    // 设置当前发言者
+    meetingManager.setCurrentSpeaker(sessionId, roleId)
+
     // 创建流式响应
     const encoder = new TextEncoder()
     const stream = new ReadableStream({
       async start(controller) {
         try {
+          let fullContent = ''
           const generator = geminiClient.generateContentStream(
             role.model,
             lastUserMessage.content,
@@ -66,6 +90,8 @@ export async function POST(request: NextRequest) {
           )
 
           for await (const chunk of generator) {
+            fullContent += chunk
+            
             const data = {
               content: chunk,
               done: false,
@@ -77,11 +103,38 @@ export async function POST(request: NextRequest) {
             )
           }
 
+          // 处理Function Call（仅对Jarvis）
+          let nextSpeaker: string | null = null
+          if (roleId === 'jarvis') {
+            const functionCalls = functionExecutor.parseFunctionCalls(fullContent)
+            
+            for (const call of functionCalls) {
+              const result = await functionExecutor.executeFunctionCall(
+                sessionId,
+                call.name,
+                call.parameters
+              )
+              
+              if (result.success && result.nextSpeaker) {
+                nextSpeaker = result.nextSpeaker
+              }
+              
+              console.log('Function call result:', result)
+            }
+            
+            // 清理内容，移除函数调用标签
+            fullContent = functionExecutor.cleanContent(fullContent)
+          }
+
+          // 更新消息计数
+          meetingManager.addMessageCount(sessionId, roleId)
+
           // 发送完成信号
           const doneData = {
             content: '',
             done: true,
-            aiRoleId: roleId
+            aiRoleId: roleId,
+            nextSpeaker
           }
           
           controller.enqueue(

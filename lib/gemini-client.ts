@@ -1,5 +1,12 @@
 import { ProxyAgent, setGlobalDispatcher } from 'undici';
 
+export interface GenerationConfig {
+  temperature?: number;
+  topK?: number;
+  topP?: number;
+  maxOutputTokens?: number;
+}
+
 export class GeminiClient {
   private apiKey: string;
   private baseUrl: string = 'https://generativelanguage.googleapis.com/v1beta';
@@ -21,7 +28,8 @@ export class GeminiClient {
   async generateContent(
     model: string,
     prompt: string,
-    systemPrompt?: string
+    systemPrompt?: string,
+    config?: GenerationConfig
   ): Promise<string> {
     const url = `${this.baseUrl}/models/${model}:generateContent?key=${this.apiKey}`;
     
@@ -37,6 +45,14 @@ export class GeminiClient {
       parts: [{ text: prompt }]
     });
 
+    const generationConfig = {
+      temperature: 0.7,
+      topK: 40,
+      topP: 0.95,
+      maxOutputTokens: 2048,
+      ...config
+    };
+
     const response = await fetch(url, {
       method: 'POST',
       headers: {
@@ -44,12 +60,7 @@ export class GeminiClient {
       },
       body: JSON.stringify({
         contents: messages,
-        generationConfig: {
-          temperature: 0.7,
-          topK: 40,
-          topP: 0.95,
-          maxOutputTokens: 1024,
-        },
+        generationConfig,
       }),
     });
 
@@ -65,7 +76,8 @@ export class GeminiClient {
   async *generateContentStream(
     model: string,
     prompt: string,
-    systemPrompt?: string
+    systemPrompt?: string,
+    config?: GenerationConfig
   ): AsyncGenerator<string, void, unknown> {
     const url = `${this.baseUrl}/models/${model}:streamGenerateContent?key=${this.apiKey}`;
     
@@ -81,6 +93,14 @@ export class GeminiClient {
       parts: [{ text: prompt }]
     });
 
+    const generationConfig = {
+      temperature: 0.7,
+      topK: 40,
+      topP: 0.95,
+      maxOutputTokens: 2048,
+      ...config
+    };
+
     const response = await fetch(url, {
       method: 'POST',
       headers: {
@@ -88,12 +108,7 @@ export class GeminiClient {
       },
       body: JSON.stringify({
         contents: messages,
-        generationConfig: {
-          temperature: 0.7,
-          topK: 40,
-          topP: 0.95,
-          maxOutputTokens: 1024,
-        },
+        generationConfig,
       }),
     });
 

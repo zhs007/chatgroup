@@ -4,6 +4,7 @@ import { useState, useEffect, useRef } from 'react'
 import { useSearchParams } from 'next/navigation'
 import { AI_ROLES, getAIRole } from '@/config/ai-roles'
 import { Message } from '@/types/chat'
+import MeetingStatus from '@/components/MeetingStatus'
 
 export default function ChatPage() {
   const searchParams = useSearchParams()
@@ -11,10 +12,11 @@ export default function ChatPage() {
   const [input, setInput] = useState('')
   const [isLoading, setIsLoading] = useState(false)
   const [typingRoles, setTypingRoles] = useState<Set<string>>(new Set())
+  const [sessionId] = useState(`session_${Date.now()}`)
   const messagesEndRef = useRef<HTMLDivElement>(null)
 
   const selectedRoleIds = searchParams.get('roles')?.split(',') || ['jarvis']
-  const selectedRoles = selectedRoleIds.map(id => getAIRole(id)).filter(Boolean)
+  const selectedRoles = selectedRoleIds.map(id => getAIRole(id)).filter((role): role is NonNullable<typeof role> => role !== undefined)
 
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' })
@@ -29,7 +31,7 @@ export default function ChatPage() {
     const welcomeMessage: Message = {
       id: 'welcome',
       role: 'assistant',
-      content: '欢迎来到 AI 聊天群组！我是主持人 Jarvis。请描述一下您对 slot 游戏的想法，我会邀请合适的专家来参与讨论。',
+      content: '🎉 欢迎来到 AI 聊天群组！\n\n我是主持人 Jarvis，将负责主持这次关于 slot 游戏设计的讨论。我会根据讨论内容智能地邀请合适的专家参与对话。\n\n✨ 新功能：\n• 智能角色管理 - 我会自动选择最合适的专家来回应\n• 发言平衡控制 - 确保每个专家都有发言机会\n• 实时统计 - 可查看各角色的参与情况\n\n请描述一下您对 slot 游戏的想法，我会邀请合适的专家来参与讨论！',
       timestamp: new Date(),
       aiRoleId: 'jarvis'
     }
@@ -139,24 +141,17 @@ export default function ChatPage() {
                   return newSet
                 })
                 
-                // 如果是 Jarvis，可能需要让其他角色继续发言
-                if (roleId === 'jarvis' && content.includes('@')) {
-                  // 解析 Jarvis 指定的下一个发言者
-                  const mentionMatch = content.match(/@(\w+)/g)
-                  if (mentionMatch) {
-                    const nextRoleId = mentionMatch[0].slice(1)
-                    if (selectedRoleIds.includes(nextRoleId) && nextRoleId !== 'jarvis') {
-                      setTimeout(() => {
-                        getAIResponse(nextRoleId, [...conversationHistory, {
-                          id: messageId,
-                          role: 'assistant',
-                          content,
-                          timestamp: new Date(),
-                          aiRoleId: roleId
-                        }])
-                      }, 1000)
-                    }
-                  }
+                // 如果有指定的下一个发言者，自动触发
+                if (data.nextSpeaker && selectedRoleIds.includes(data.nextSpeaker)) {
+                  setTimeout(() => {
+                    getAIResponse(data.nextSpeaker, [...conversationHistory, {
+                      id: messageId,
+                      role: 'assistant',
+                      content,
+                      timestamp: new Date(),
+                      aiRoleId: roleId
+                    }])
+                  }, 1500) // 稍微延长间隔以便用户阅读
                 }
                 
                 return
@@ -202,12 +197,15 @@ export default function ChatPage() {
               ))}
             </div>
           </div>
-          <a 
-            href="/" 
-            className="text-blue-600 hover:text-blue-700 text-sm font-medium"
-          >
-            重新选择角色
-          </a>
+          <div className="flex items-center space-x-4">
+            <MeetingStatus selectedRoleIds={selectedRoleIds} sessionId={sessionId} />
+            <a 
+              href="/" 
+              className="text-blue-600 hover:text-blue-700 text-sm font-medium"
+            >
+              重新选择角色
+            </a>
+          </div>
         </div>
       </div>
 
