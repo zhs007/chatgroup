@@ -48,7 +48,7 @@ export async function POST(request: NextRequest) {
     // 创建或更新会话
     let session = meetingManager.getSession(sessionId)
     if (!session) {
-      session = meetingManager.createSession(sessionId, selectedRoles)
+      session = await meetingManager.createSession(sessionId, selectedRoles)
     }
 
     return NextResponse.json({ session })
