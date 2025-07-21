@@ -10,7 +10,7 @@ export async function POST(request: NextRequest) {
   try {
     const { roleId, messages, selectedRoles } = await request.json()
     
-    const role = getAIRole(roleId)
+    const role = await getAIRole(roleId)
     if (!role) {
       return NextResponse.json({ error: 'Invalid role ID' }, { status: 400 })
     }
@@ -21,49 +21,47 @@ export async function POST(request: NextRequest) {
     
     let session = meetingManager.getSession(sessionId)
     if (!session) {
-      session = meetingManager.createSession(sessionId, selectedRoles)
+      session = await meetingManager.createSession(sessionId, selectedRoles)
     }
 
     const geminiClient = new GeminiClient()
     const functionExecutor = new FunctionCallExecutor()
     
     // 构建对话历史
-    const conversationContext = messages
-      .slice(-10) // 只取最近10条消息以控制token数量
-      .map((msg: Message) => {
-        if (msg.role === 'user') {
-          return `用户: ${msg.content}`
-        } else if (msg.aiRoleId) {
-          const senderRole = getAIRole(msg.aiRoleId)
-          return `${senderRole?.name || 'AI'}: ${msg.content}`
-        }
-        return `AI: ${msg.content}`
-      })
-      .join('\n\n')
+    const conversationContext = await Promise.all(
+      messages
+        .slice(-10) // 只取最近10条消息以控制token数量
+        .map(async (msg: Message) => {
+          if (msg.role === 'user') {
+            return `用户: ${msg.content}`
+          } else if (msg.aiRoleId) {
+            const senderRole = await getAIRole(msg.aiRoleId)
+            return `${senderRole?.name || 'AI'}: ${msg.content}`
+          }
+          return `AI: ${msg.content}`
+        })
+    )
 
     // 构建系统提示词
     let systemPrompt = role.prompt
     
     if (roleId === 'jarvis') {
-      const availableRoles = selectedRoles
-        .filter((id: string) => id !== 'jarvis')
-        .map((id: string) => getAIRole(id))
+      const availableRoles = await Promise.all(
+        selectedRoles
+          .filter((id: string) => id !== 'jarvis')
+          .map((id: string) => getAIRole(id))
+      )
+      
+      const rolesDescription = availableRoles
         .filter(Boolean)
         .map((r: any) => `${r.id} (${r.name} - ${r.description})`)
         .join(', ')
       
-      systemPrompt += `\n\n当前讨论中的可用专家: ${availableRoles}\n\n`
+      systemPrompt += `\n\n当前讨论中的可用专家: ${rolesDescription}\n\n`
       systemPrompt += getFunctionCallPrompt()
-      
-      // 添加发言统计信息
-      const stats = meetingManager.getSpeakingStats(sessionId)
-      const statsText = Object.entries(stats)
-        .map(([id, count]) => `${getAIRole(id)?.name || id}: ${count}次`)
-        .join(', ')
-      systemPrompt += `\n\n当前发言统计: ${statsText}\n\n`
     }
     
-    systemPrompt += `\n\n对话历史:\n${conversationContext}\n\n请根据你的角色设定回复:`
+    systemPrompt += `\n\n对话历史:\n${conversationContext.join('\n\n')}\n\n请根据你的角色设定回复:`
 
     const lastUserMessage = messages
       .slice()

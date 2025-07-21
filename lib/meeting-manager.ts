@@ -2,6 +2,7 @@ import { MeetingSession, MeetingParticipant, SpeakerAction } from '@/types/meeti
 import { getAIRole } from '@/config/ai-roles';
 
 export class MeetingManager {
+  // ...existing code...
   private static instance: MeetingManager;
   private sessions: Map<string, MeetingSession> = new Map();
 
@@ -12,13 +13,18 @@ export class MeetingManager {
     return MeetingManager.instance;
   }
 
-  createSession(sessionId: string, selectedRoleIds: string[]): MeetingSession {
-    const participants: MeetingParticipant[] = selectedRoleIds.map(roleId => ({
-      roleId,
-      name: getAIRole(roleId)?.name || roleId,
-      isActive: true,
-      messageCount: 0
-    }));
+  async createSession(sessionId: string, selectedRoleIds: string[]): Promise<MeetingSession> {
+    const participants: MeetingParticipant[] = await Promise.all(
+      selectedRoleIds.map(async roleId => {
+        const role = await getAIRole(roleId);
+        return {
+          roleId,
+          name: role?.name || roleId,
+          isActive: true,
+          messageCount: 0
+        };
+      })
+    );
 
     const session: MeetingSession = {
       id: sessionId,

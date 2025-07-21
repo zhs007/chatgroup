@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useEffect } from 'react'
-import { getAIRole } from '@/config/ai-roles'
+import { getAIRole, AIRole } from '@/config/ai-roles'
 
 interface MeetingStatusProps {
   selectedRoleIds: string[]
@@ -15,6 +15,37 @@ interface SpeakingStats {
 export default function MeetingStatus({ selectedRoleIds, sessionId }: MeetingStatusProps) {
   const [stats, setStats] = useState<SpeakingStats>({})
   const [isVisible, setIsVisible] = useState(false)
+  const [roles, setRoles] = useState<Record<string, AIRole>>({})
+  const [rolesLoading, setRolesLoading] = useState(true)
+
+  // 异步加载角色信息
+  useEffect(() => {
+    const loadRoles = async () => {
+      try {
+        const rolePromises = selectedRoleIds.map(async id => {
+          const role = await getAIRole(id)
+          return { id, role }
+        })
+        
+        const roleResults = await Promise.all(rolePromises)
+        const rolesMap: Record<string, AIRole> = {}
+        
+        roleResults.forEach(({ id, role }) => {
+          if (role) {
+            rolesMap[id] = role
+          }
+        })
+        
+        setRoles(rolesMap)
+      } catch (error) {
+        console.error('加载角色信息失败:', error)
+      } finally {
+        setRolesLoading(false)
+      }
+    }
+    
+    loadRoles()
+  }, [selectedRoleIds.join(',')])
 
   useEffect(() => {
     if (!sessionId) return
@@ -55,20 +86,24 @@ export default function MeetingStatus({ selectedRoleIds, sessionId }: MeetingSta
         <div className="absolute top-full right-0 mt-2 bg-white rounded-lg shadow-lg border p-4 min-w-48 z-10">
           <h3 className="text-sm font-medium text-gray-900 mb-3">发言统计</h3>
           <div className="space-y-2">
-            {selectedRoleIds.map(roleId => {
-              const role = getAIRole(roleId)
-              const count = stats[roleId] || 0
-              
-              return role ? (
-                <div key={roleId} className="flex items-center justify-between text-xs">
-                  <div className="flex items-center">
-                    <span className={`w-3 h-3 rounded-full ${role.color} mr-2`}></span>
-                    <span className="text-gray-700">{role.name}</span>
+            {rolesLoading ? (
+              <div className="text-xs text-gray-500">加载角色信息中...</div>
+            ) : (
+              selectedRoleIds.map(roleId => {
+                const role = roles[roleId]
+                const count = stats[roleId] || 0
+                
+                return role ? (
+                  <div key={roleId} className="flex items-center justify-between text-xs">
+                    <div className="flex items-center">
+                      <span className={`w-3 h-3 rounded-full ${role.color} mr-2`}></span>
+                      <span className="text-gray-700">{role.name}</span>
+                    </div>
+                    <span className="text-gray-500">{count}次</span>
                   </div>
-                  <span className="text-gray-500">{count}次</span>
-                </div>
-              ) : null
-            })}
+                ) : null
+              })
+            )}
           </div>
           
           <div className="mt-3 pt-3 border-t border-gray-200">

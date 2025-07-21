@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useRef } from 'react'
 import { useSearchParams } from 'next/navigation'
-import { AI_ROLES, getAIRole } from '@/config/ai-roles'
+import { getAIRole, AIRole } from '@/config/ai-roles'
 import { Message } from '@/types/chat'
 import MeetingStatus from '@/components/MeetingStatus'
 
@@ -13,10 +13,33 @@ export default function ChatPage() {
   const [isLoading, setIsLoading] = useState(false)
   const [typingRoles, setTypingRoles] = useState<Set<string>>(new Set())
   const [sessionId] = useState(`session_${Date.now()}`)
+  const [selectedRoles, setSelectedRoles] = useState<AIRole[]>([])
+  const [rolesLoading, setRolesLoading] = useState(true)
   const messagesEndRef = useRef<HTMLDivElement>(null)
 
   const selectedRoleIds = searchParams.get('roles')?.split(',') || ['jarvis']
-  const selectedRoles = selectedRoleIds.map(id => getAIRole(id)).filter((role): role is NonNullable<typeof role> => role !== undefined)
+
+  // 同步角色查找函数（基于已加载的角色）
+  const findRole = (roleId: string): AIRole | undefined => {
+    return selectedRoles.find(role => role.id === roleId)
+  }
+
+  // 异步加载角色信息
+  useEffect(() => {
+    const loadRoles = async () => {
+      try {
+        const roles = await Promise.all(
+          selectedRoleIds.map(id => getAIRole(id))
+        )
+        setSelectedRoles(roles.filter((role): role is AIRole => role !== undefined))
+      } catch (error) {
+        console.error('加载角色失败:', error)
+      } finally {
+        setRolesLoading(false)
+      }
+    }
+    loadRoles()
+  }, [selectedRoleIds.join(',')])
 
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' })
@@ -31,7 +54,7 @@ export default function ChatPage() {
     const welcomeMessage: Message = {
       id: 'welcome',
       role: 'assistant',
-      content: '🎉 欢迎来到 AI 聊天群组！\n\n我是主持人 Jarvis，将负责主持这次关于 slot 游戏设计的讨论。我会根据讨论内容智能地邀请合适的专家参与对话。\n\n✨ 新功能：\n• 智能角色管理 - 我会自动选择最合适的专家来回应\n• 发言平衡控制 - 确保每个专家都有发言机会\n• 实时统计 - 可查看各角色的参与情况\n\n请描述一下您对 slot 游戏的想法，我会邀请合适的专家来参与讨论！',
+      content: '🎉 欢迎来到 AI 智能协作群组！\n\n我是主持人 Jarvis，将管理专家间的迭代协作流程，确保通过多轮讨论达成最佳设计方案。\n\n🔄 **迭代协作特色**：\n• **玩法设计循环**：Tom提出创意 → Ash评估数学可行性 → Tom根据反馈调整 → 循环直到完美\n• **美术设计循环**：Tom提出主题 → Ani给美术建议 → Tom整合优化 → 循环直到满意\n• **智能状态管理**：系统会跟踪协作阶段，确保问题得到彻底解决\n• **完整方案交付**：最终交还经过充分迭代的完整设计方案\n\n请描述您的slot游戏想法，我会启动专家协作流程！',
       timestamp: new Date(),
       aiRoleId: 'jarvis'
     }
@@ -64,7 +87,7 @@ export default function ChatPage() {
   }
 
   const getAIResponse = async (roleId: string, conversationHistory: Message[]) => {
-    const role = getAIRole(roleId)
+    const role = await getAIRole(roleId)
     if (!role) return
 
     setTypingRoles(prev => new Set([...prev, roleId]))
@@ -220,7 +243,7 @@ export default function ChatPage() {
               {message.role === 'assistant' && message.aiRoleId && (
                 <div className="flex items-center mb-2">
                   {(() => {
-                    const role = getAIRole(message.aiRoleId)
+                    const role = findRole(message.aiRoleId)
                     return role ? (
                       <>
                         <span className={`w-6 h-6 rounded-full ${role.color} flex items-center justify-center text-white text-sm mr-2`}>
@@ -241,7 +264,7 @@ export default function ChatPage() {
           
           {/* Typing indicators */}
           {Array.from(typingRoles).map(roleId => {
-            const role = getAIRole(roleId)
+            const role = findRole(roleId)
             return role ? (
               <div key={`typing-${roleId}`} className="chat-message assistant">
                 <div className="flex items-center mb-2">
