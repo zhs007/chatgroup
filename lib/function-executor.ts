@@ -1,4 +1,5 @@
 import { MeetingManager } from './meeting-manager';
+import { documentManager } from './document-manager';
 import { getAIRole } from '@/config/ai-roles';
 
 export interface FunctionCallResult {
@@ -19,10 +20,12 @@ export class FunctionCallExecutor {
   async executeFunctionCall(
     sessionId: string,
     functionName: string,
-    parameters: any
+    parameters: any,
+    currentRoleId?: string
   ): Promise<FunctionCallResult> {
     try {
       switch (functionName) {
+        // 会议管理函数
         case 'invite_expert':
           return this.inviteExpert(sessionId, parameters);
         
@@ -46,6 +49,28 @@ export class FunctionCallExecutor {
         
         case 'handover_to_user':
           return this.handoverToUser(parameters);
+
+        // 文档管理函数
+        case 'create_document':
+          return this.createDocument(parameters, currentRoleId || 'system');
+        
+        case 'read_document':
+          return this.readDocument(parameters);
+        
+        case 'update_document':
+          return this.updateDocument(parameters, currentRoleId || 'system');
+        
+        case 'search_documents':
+          return this.searchDocuments(parameters);
+        
+        case 'list_documents':
+          return this.listDocuments(parameters);
+        
+        case 'get_document_versions':
+          return this.getDocumentVersions(parameters);
+        
+        case 'restore_document_version':
+          return this.restoreDocumentVersion(parameters, currentRoleId || 'system');
         
         default:
           return {
@@ -321,5 +346,247 @@ export class FunctionCallExecutor {
   // 移除回复中的函数调用标签，只保留文字内容
   cleanContent(content: string): string {
     return content.replace(/<function_call>[\s\S]*?<\/function_call>/g, '').trim();
+  }
+
+  // === 文档管理相关方法 ===
+
+  private async createDocument(params: { 
+    title: string;
+    content: string;
+    format: 'markdown' | 'json' | 'yaml' | 'text';
+    tags?: string[];
+    metadata?: Record<string, any>;
+  }, createdBy: string): Promise<FunctionCallResult> {
+    try {
+      const document = await documentManager.createDocument({
+        ...params,
+        createdBy
+      });
+      
+      return {
+        success: true,
+        result: {
+          message: `文档 "${document.title}" 已创建`,
+          document: {
+            id: document.id,
+            title: document.title,
+            format: document.format,
+            tags: document.tags,
+            createdAt: document.createdAt
+          }
+        }
+      };
+    } catch (error) {
+      return {
+        success: false,
+        error: `创建文档失败: ${error}`
+      };
+    }
+  }
+
+  private async readDocument(params: { documentId: string }): Promise<FunctionCallResult> {
+    try {
+      const document = await documentManager.getDocument(params.documentId);
+      
+      if (!document) {
+        return {
+          success: false,
+          error: `文档 ${params.documentId} 不存在`
+        };
+      }
+      
+      return {
+        success: true,
+        result: {
+          message: `文档 "${document.title}" 内容`,
+          document: {
+            id: document.id,
+            title: document.title,
+            content: document.content,
+            format: document.format,
+            tags: document.tags,
+            metadata: document.metadata,
+            createdAt: document.createdAt,
+            updatedAt: document.updatedAt,
+            createdBy: document.createdBy,
+            lastModifiedBy: document.lastModifiedBy,
+            version: document.version
+          }
+        }
+      };
+    } catch (error) {
+      return {
+        success: false,
+        error: `读取文档失败: ${error}`
+      };
+    }
+  }
+
+  private async updateDocument(params: { 
+    documentId: string;
+    title?: string;
+    content?: string;
+    tags?: string[];
+    changeDescription?: string;
+  }, lastModifiedBy: string): Promise<FunctionCallResult> {
+    try {
+      const document = await documentManager.updateDocument(params.documentId, {
+        ...params,
+        lastModifiedBy
+      });
+      
+      if (!document) {
+        return {
+          success: false,
+          error: `文档 ${params.documentId} 不存在`
+        };
+      }
+      
+      return {
+        success: true,
+        result: {
+          message: `文档 "${document.title}" 已更新到版本 ${document.version}`,
+          document: {
+            id: document.id,
+            title: document.title,
+            version: document.version,
+            updatedAt: document.updatedAt,
+            lastModifiedBy: document.lastModifiedBy
+          }
+        }
+      };
+    } catch (error) {
+      return {
+        success: false,
+        error: `更新文档失败: ${error}`
+      };
+    }
+  }
+
+  private async searchDocuments(params: {
+    query?: string;
+    tags?: string[];
+    format?: string;
+    createdBy?: string;
+  }): Promise<FunctionCallResult> {
+    try {
+      const documents = await documentManager.searchDocuments(params);
+      
+      return {
+        success: true,
+        result: {
+          message: `找到 ${documents.length} 个文档`,
+          documents: documents.map(doc => ({
+            id: doc.id,
+            title: doc.title,
+            format: doc.format,
+            tags: doc.tags,
+            createdAt: doc.createdAt,
+            updatedAt: doc.updatedAt,
+            createdBy: doc.createdBy,
+            version: doc.version,
+            isArchived: doc.isArchived
+          }))
+        }
+      };
+    } catch (error) {
+      return {
+        success: false,
+        error: `搜索文档失败: ${error}`
+      };
+    }
+  }
+
+  private async listDocuments(params: { includeArchived?: boolean }): Promise<FunctionCallResult> {
+    try {
+      const documents = await documentManager.listDocuments(params.includeArchived || false);
+      
+      return {
+        success: true,
+        result: {
+          message: `当前有 ${documents.length} 个文档`,
+          documents: documents.map(doc => ({
+            id: doc.id,
+            title: doc.title,
+            format: doc.format,
+            tags: doc.tags,
+            createdAt: doc.createdAt,
+            updatedAt: doc.updatedAt,
+            createdBy: doc.createdBy,
+            version: doc.version,
+            isArchived: doc.isArchived
+          }))
+        }
+      };
+    } catch (error) {
+      return {
+        success: false,
+        error: `获取文档列表失败: ${error}`
+      };
+    }
+  }
+
+  private async getDocumentVersions(params: { documentId: string }): Promise<FunctionCallResult> {
+    try {
+      const versions = await documentManager.getDocumentVersions(params.documentId);
+      
+      return {
+        success: true,
+        result: {
+          message: `文档有 ${versions.length} 个版本`,
+          versions: versions.map(version => ({
+            versionId: version.versionId,
+            version: version.version,
+            createdAt: version.createdAt,
+            createdBy: version.createdBy,
+            changeDescription: version.changeDescription
+          }))
+        }
+      };
+    } catch (error) {
+      return {
+        success: false,
+        error: `获取文档版本失败: ${error}`
+      };
+    }
+  }
+
+  private async restoreDocumentVersion(params: { 
+    documentId: string;
+    version: number;
+  }, restoredBy: string): Promise<FunctionCallResult> {
+    try {
+      const document = await documentManager.restoreDocumentVersion(
+        params.documentId, 
+        params.version, 
+        restoredBy
+      );
+      
+      if (!document) {
+        return {
+          success: false,
+          error: `无法恢复文档版本，文档或版本不存在`
+        };
+      }
+      
+      return {
+        success: true,
+        result: {
+          message: `文档 "${document.title}" 已恢复到版本 ${params.version}，当前版本为 ${document.version}`,
+          document: {
+            id: document.id,
+            title: document.title,
+            version: document.version,
+            updatedAt: document.updatedAt,
+            lastModifiedBy: document.lastModifiedBy
+          }
+        }
+      };
+    } catch (error) {
+      return {
+        success: false,
+        error: `恢复文档版本失败: ${error}`
+      };
+    }
   }
 }

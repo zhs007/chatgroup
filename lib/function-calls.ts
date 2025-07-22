@@ -8,6 +8,167 @@ export interface FunctionCall {
   };
 }
 
+// 文档管理函数
+export const DOCUMENT_FUNCTIONS: FunctionCall[] = [
+  {
+    name: "create_document",
+    description: "创建新的项目文档，用于记录设计方案、会议纪要、技术规格等。支持多种格式(markdown/json/yaml/text)。",
+    parameters: {
+      type: "object",
+      properties: {
+        title: {
+          type: "string",
+          description: "文档标题，应该简洁明确"
+        },
+        content: {
+          type: "string",
+          description: "文档内容，可以是文本、JSON、YAML等格式"
+        },
+        format: {
+          type: "string",
+          description: "文档格式",
+          enum: ["markdown", "json", "yaml", "text"]
+        },
+        tags: {
+          type: "array",
+          items: {
+            type: "string"
+          },
+          description: "文档标签，用于分类和搜索"
+        },
+        metadata: {
+          type: "object",
+          description: "文档元数据，如类型、优先级等"
+        }
+      },
+      required: ["title", "content", "format"]
+    }
+  },
+  {
+    name: "read_document",
+    description: "读取指定的项目文档内容。",
+    parameters: {
+      type: "object",
+      properties: {
+        documentId: {
+          type: "string",
+          description: "要读取的文档ID"
+        }
+      },
+      required: ["documentId"]
+    }
+  },
+  {
+    name: "update_document",
+    description: "更新现有文档内容，会自动创建版本历史。",
+    parameters: {
+      type: "object",
+      properties: {
+        documentId: {
+          type: "string",
+          description: "要更新的文档ID"
+        },
+        title: {
+          type: "string",
+          description: "新的文档标题（可选）"
+        },
+        content: {
+          type: "string",
+          description: "新的文档内容（可选）"
+        },
+        tags: {
+          type: "array",
+          items: {
+            type: "string"
+          },
+          description: "新的标签列表（可选）"
+        },
+        changeDescription: {
+          type: "string",
+          description: "本次修改的描述"
+        }
+      },
+      required: ["documentId"]
+    }
+  },
+  {
+    name: "search_documents",
+    description: "搜索项目文档，支持按关键词、标签、创建者等条件筛选。",
+    parameters: {
+      type: "object",
+      properties: {
+        query: {
+          type: "string",
+          description: "搜索关键词，会在标题和内容中查找"
+        },
+        tags: {
+          type: "array",
+          items: {
+            type: "string"
+          },
+          description: "按标签筛选"
+        },
+        format: {
+          type: "string",
+          description: "按格式筛选",
+          enum: ["markdown", "json", "yaml", "text"]
+        },
+        createdBy: {
+          type: "string",
+          description: "按创建者筛选（角色ID）"
+        }
+      },
+      required: []
+    }
+  },
+  {
+    name: "list_documents",
+    description: "列出所有可用的项目文档。",
+    parameters: {
+      type: "object",
+      properties: {
+        includeArchived: {
+          type: "boolean",
+          description: "是否包含已归档的文档"
+        }
+      },
+      required: []
+    }
+  },
+  {
+    name: "get_document_versions",
+    description: "获取文档的版本历史。",
+    parameters: {
+      type: "object",
+      properties: {
+        documentId: {
+          type: "string",
+          description: "文档ID"
+        }
+      },
+      required: ["documentId"]
+    }
+  },
+  {
+    name: "restore_document_version",
+    description: "将文档恢复到指定版本。",
+    parameters: {
+      type: "object",
+      properties: {
+        documentId: {
+          type: "string",
+          description: "文档ID"
+        },
+        version: {
+          type: "number",
+          description: "要恢复的版本号"
+        }
+      },
+      required: ["documentId", "version"]
+    }
+  }
+];
+
 export const MEETING_FUNCTIONS: FunctionCall[] = [
   {
     name: "invite_expert",
@@ -169,7 +330,7 @@ export const MEETING_FUNCTIONS: FunctionCall[] = [
 
 export function getFunctionCallPrompt(): string {
   return `
-作为会议主持人，你需要管理迭代协作流程，确保专家们通过多轮讨论达成最佳方案：
+作为会议主持人，你需要管理迭代协作流程和项目文档，确保专家们通过多轮讨论达成最佳方案：
 
 迭代协作流程：
 1. **玩法设计循环**：
@@ -189,8 +350,21 @@ export function getFunctionCallPrompt(): string {
 3. **图像生成阶段**：
    - 设计确定后 → 邀请Jerry生成图像描述
 
-可用工具：
+项目文档管理：
+- 所有重要的设计决策、创意方案、技术规格都应记录在项目文档中
+- 使用create_document创建新文档（支持markdown/json/yaml/text格式）
+- 使用update_document更新文档，系统会自动维护版本历史
+- 使用search_documents和list_documents查找相关文档
+- 专家可以通过read_document查阅之前的设计方案
+- 当需要回顾或参考之前的决策时，使用get_document_versions查看历史版本
+
+可用工具（会议管理）：
 ${MEETING_FUNCTIONS.map(func => `
+- ${func.name}: ${func.description}
+`).join('\n')}
+
+可用工具（文档管理）：
+${DOCUMENT_FUNCTIONS.map(func => `
 - ${func.name}: ${func.description}
 `).join('\n')}
 
@@ -198,8 +372,10 @@ ${MEETING_FUNCTIONS.map(func => `
 1. 识别何时需要迭代：专家提出具体问题或建议时
 2. 使用request_iteration明确要求改进
 3. 使用check_consensus确认是否达成共识
-4. 只有在所有相关专家都满意后才进入下一阶段
-5. 最终使用handover_to_user交还完整的设计方案
+4. 重要讨论结果应记录到项目文档中
+5. 专家应参考已有文档避免重复工作
+6. 只有在所有相关专家都满意后才进入下一阶段
+7. 最终使用handover_to_user交还完整的设计方案
 
 使用格式：
 <function_call>

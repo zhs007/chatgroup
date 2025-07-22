@@ -47,6 +47,19 @@ export default function Home() {
   return (
     <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100 p-6">
       <div className="max-w-6xl mx-auto">
+        {/* 导航栏 */}
+        <div className="flex justify-between items-center mb-8">
+          <div></div>
+          <div className="flex gap-4">
+            <button
+              onClick={() => router.push('/documents')}
+              className="bg-green-600 hover:bg-green-700 text-white font-medium py-2 px-4 rounded-lg transition-colors duration-200"
+            >
+              📁 项目文档管理
+            </button>
+          </div>
+        </div>
+
         <div className="text-center mb-12">
           <h1 className="text-4xl font-bold text-gray-900 mb-4">
             AI 聊天群组

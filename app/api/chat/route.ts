@@ -101,26 +101,27 @@ export async function POST(request: NextRequest) {
             )
           }
 
-          // 处理Function Call（仅对Jarvis）
+          // 处理Function Call
           let nextSpeaker: string | null = null
-          if (roleId === 'jarvis') {
-            const functionCalls = functionExecutor.parseFunctionCalls(fullContent)
+          const functionCalls = functionExecutor.parseFunctionCalls(fullContent)
+          
+          for (const call of functionCalls) {
+            const result = await functionExecutor.executeFunctionCall(
+              sessionId,
+              call.name,
+              call.parameters,
+              roleId // 传递当前角色ID用于文档操作
+            )
             
-            for (const call of functionCalls) {
-              const result = await functionExecutor.executeFunctionCall(
-                sessionId,
-                call.name,
-                call.parameters
-              )
-              
-              if (result.success && result.nextSpeaker) {
-                nextSpeaker = result.nextSpeaker
-              }
-              
-              console.log('Function call result:', result)
+            if (result.success && result.nextSpeaker) {
+              nextSpeaker = result.nextSpeaker
             }
             
-            // 清理内容，移除函数调用标签
+            console.log('Function call result:', result)
+          }
+          
+          // 清理内容，移除函数调用标签
+          if (functionCalls.length > 0) {
             fullContent = functionExecutor.cleanContent(fullContent)
           }
 
